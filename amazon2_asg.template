@@ -1,0 +1,1619 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  amazon2_asg.template - Autoscaling EC2 Instances with Rolling Updates and
+  Notifications. **WARNING** This template creates one or more Amazon EC2 
+  instances and an Elastic Load Balancer. You will be billed for the AWS
+  resources used if you create a stack from this template.
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Parameters:
+          - SecurityGroupList
+          - Subnets
+        Label:
+          default: Network Configuration
+      - Parameters:
+          - DefaultAmiSource
+          - Environment
+          - ImageId
+          - InstanceName
+          - InstanceType
+          - KeyName
+          - ParamStoreAmiPath
+        Label:
+          default: Basic Configuration
+      - Parameters:
+          - BackupsEnabled
+          - EBSOptimized
+          - PlacementTenancy
+        Label:
+          default: Advanced Configuration
+      - Parameters:
+          - CWLogRetention
+          - CustomCWConfig
+          - EnableRackspaceTicket
+          - ScalingNotificationTopic
+          - TerminatedInstances
+        Label:
+          default: Monitoring Configuration
+      - Parameters:
+          - CustomSSMStepCount
+          - CustomSSMSteps
+          - PatchingGroupTag
+          - SSMInventoryTag
+          - SSMRefreshFrequency
+        Label:
+          default: SSM Configuration
+      - Parameters:
+          - EbsVolumeSize
+          - EbsVolumeType
+          - EncryptRootEBSVolume
+          - Iops
+        Label:
+          default: Primary EBS Volume properties
+      - Parameters:
+          - Ebs2VolumeSize
+          - Ebs2VolumeType
+          - EncryptEBSVolume
+          - IopsVolume2
+        Label:
+          default: Secondary EBS Volume properties
+      - Parameters:
+          - EC2ScaleDownAdjustment
+          - EC2ScaleDownCooldown
+          - EC2ScaleUpAdjustment
+          - EC2ScaleUpCooldown
+          - HealthCheckGracePeriod
+          - HealthCheckType
+          - MinInstancesInService
+          - ScalingCreateTimeOut
+          - ScalingMax
+          - ScalingMin
+          - ScalingTermination
+          - ScalingUpdateTimeOut
+          - SpotPrice
+        Label:
+          default: AutoScaling Configuration
+      - Parameters:
+          - LoadBalancerNames
+          - TargetGroupARNs
+        Label:
+          default: Load Balancer Configuration (OPTIONAL)
+      - Parameters:
+          - CwHighOperator
+          - CwHighPeriod
+          - CwHighThreshold
+          - CwLowOperator
+          - CwLowPeriod
+          - CwLowThreshold
+          - CwPeriodEvaluations
+          - CwScalingMetric
+        Label:
+          default: AutoScaling Alarm Configuration
+      - Parameters:
+          - InstanceRoleManagedPolicyArns
+        Label:
+          default: IAM Configuration
+    ParameterLabels:
+      SecurityGroupList:
+        default: Security Groups
+      InstanceName:
+        default: Instance Name
+      InstanceType:
+        default: Instance Type
+      KeyName:
+        default: Key Pair
+      ImageId:
+        default: Image ID
+      BackupsEnabled:
+        default: Backup Tag value
+      EBSOptimized:
+        default: Enable EBS Optimization
+      PlacementTenancy:
+        default: Tenancy
+      CWLogRetention:
+        default: Cloudwatch Log Retention
+      PatchingGroupTag:
+        default: SSM Patching Group
+      SSMInventoryTag:
+        default: Perform SSM Inventory?
+      CustomCWConfig:
+        default: Custom Cloudwatch Parameters
+      CustomSSMSteps:
+        default: Custom Bootstrapping Steps
+      CustomSSMStepCount:
+        default: Number of Custom Bootstrapping Steps
+      SSMRefreshFrequency:
+        default: SSM Association refresh rate
+      Iops:
+        default: Primary EBS volume IOPS
+      EbsVolumeSize:
+        default: Primary EBS Volume Size
+      EbsVolumeType:
+        default: Primary EBS Volume Type
+      EncryptRootEBSVolume:
+        default: Encrypt Root EBS Volume?
+      IopsVolume2:
+        default: Secondary EBS Volume IOPS
+      Ebs2VolumeSize:
+        default: Secondary EBS Volume Size
+      Ebs2VolumeType:
+        default: Secondary EBS Volume Type
+      EncryptEBSVolume:
+        default: Encrypt Secondary EBS Volume?
+      ScalingMin:
+        default: Minimum Instances
+      ScalingMax:
+        default: Maximum Instances
+      ScalingTermination:
+        default: Termination Count
+      ScalingCreateTimeOut:
+        default: Create Signal Timeout
+      ScalingUpdateTimeOut:
+        default: Update Signal Timeout
+      EC2ScaleUpCooldown:
+        default: Cooldown time after Scale Up
+      EC2ScaleUpAdjustment:
+        default: Scale Up by
+      EC2ScaleDownCooldown:
+        default: Cooldown time after Scale Down
+      EC2ScaleDownAdjustment:
+        default: Scale Down by
+      SpotPrice:
+        default: Spot Price
+      HealthCheckGracePeriod:
+        default: Health Check Period
+      HealthCheckType:
+        default: Health Check Type
+      MinInstancesInService:
+        default: Min Instance in Service
+      TerminatedInstances:
+        default: Number of Terminated Instances
+      ScalingNotificationTopic:
+        default: Scale Notification Topic
+      TargetGroupARNs:
+        default: Target Group ARNs
+      LoadBalancerNames:
+        default: CLB List
+      CwScalingMetric:
+        default: ASG Scaling metric
+      CwHighOperator:
+        default: Scale Up operator
+      CwHighPeriod:
+        default: Scale Up period
+      CwHighThreshold:
+        default: Scale Up threshold
+      CwPeriodEvaluations:
+        default: Scaling period evaluations
+      CwLowOperator:
+        default: Scale Down operator
+      CwLowPeriod:
+        default: Scale Down period
+      CwLowThreshold:
+        default: Scale Down period
+      ParamStoreAmiPath:
+        default: AMI Paramater Store Path
+      DefaultAmiSource:
+        default: AMI Lookup source
+  Jetstream:
+    Commit: bef74eb919383ae780528e0baa6241452d26bdb8
+    Date: '2021-01-04 18:01'
+Parameters:
+  Subnets:
+    Description: Subnets for Application
+    Type: 'List<AWS::EC2::Subnet::Id>'
+  SecurityGroupList:
+    Description: A list of EC2 security groups to assign to this resource.
+    Type: 'List<AWS::EC2::SecurityGroup::Id>'
+  InstanceName:
+    ConstraintDescription: Must follow normal syntax conventions.
+    Description: EC2 Server Instance Name
+    Type: String
+  InstanceType:
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+      - t3a.nano
+      - t3a.micro
+      - t3a.small
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+      - t3a.2xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+      - r5.8xlarge
+      - r5.12xlarge
+      - r5.16xlarge
+      - r5.24xlarge
+      - r5.metal
+      - r5a.large
+      - r5a.xlarge
+      - r5a.2xlarge
+      - r5a.4xlarge
+      - r5a.8xlarge
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - r5b.large
+      - r5b.xlarge
+      - r5b.2xlarge
+      - r5b.4xlarge
+      - r5b.8xlarge
+      - r5b.12xlarge
+      - r5b.16xlarge
+      - r5b.24xlarge
+      - r5b.metal
+      - r5d.large
+      - r5d.xlarge
+      - r5d.2xlarge
+      - r5d.4xlarge
+      - r5d.8xlarge
+      - r5d.12xlarge
+      - r5d.16xlarge
+      - r5d.24xlarge
+      - r5d.metal
+      - r5ad.large
+      - r5ad.xlarge
+      - r5ad.2xlarge
+      - r5ad.4xlarge
+      - r5ad.8xlarge
+      - r5ad.12xlarge
+      - r5ad.16xlarge
+      - r5ad.24xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.xlarge
+      - x1e.2xlarge
+      - x1e.4xlarge
+      - x1e.8xlarge
+      - x1e.16xlarge
+      - x1e.32xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i3.large
+      - i3.xlarge
+      - i3.2xlarge
+      - i3.4xlarge
+      - i3.8xlarge
+      - i3.16xlarge
+      - i3.metal
+      - i3en.large
+      - i3en.xlarge
+      - i3en.2xlarge
+      - i3en.3xlarge
+      - i3en.6xlarge
+      - i3en.12xlarge
+      - i3en.24xlarge
+      - i3en.metal
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.12xlarge
+      - c5.18xlarge
+      - c5.24xlarge
+      - c5.metal
+      - c5a.large
+      - c5a.xlarge
+      - c5a.2xlarge
+      - c5a.4xlarge
+      - c5a.8xlarge
+      - c5a.12xlarge
+      - c5a.16xlarge
+      - c5a.24xlarge
+      - c5ad.large
+      - c5ad.xlarge
+      - c5ad.2xlarge
+      - c5ad.4xlarge
+      - c5ad.8xlarge
+      - c5ad.12xlarge
+      - c5ad.16xlarge
+      - c5ad.24xlarge
+      - c5d.large
+      - c5d.xlarge
+      - c5d.2xlarge
+      - c5d.4xlarge
+      - c5d.9xlarge
+      - c5d.12xlarge
+      - c5d.18xlarge
+      - c5d.24xlarge
+      - c5d.metal
+      - c5n.large
+      - c5n.xlarge
+      - c5n.2xlarge
+      - c5n.4xlarge
+      - c5n.9xlarge
+      - c5n.18xlarge
+      - c5n.metal
+      - g2.2xlarge
+      - g2.8xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+      - g3s.xlarge
+      - g4ad.4xlarge
+      - g4ad.8xlarge
+      - g4ad.16xlarge
+      - g4dn.xlarge
+      - g4dn.2xlarge
+      - g4dn.4xlarge
+      - g4dn.8xlarge
+      - g4dn.12xlarge
+      - g4dn.16xlarge
+      - g4dn.metal
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - p3dn.24xlarge
+      - p4d.24xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - d3.xlarge
+      - d3.2xlarge
+      - d3.4xlarge
+      - d3.8xlarge
+      - d3en.xlarge
+      - d3en.2xlarge
+      - d3en.4xlarge
+      - d3en.6xlarge
+      - d3en.8xlarge
+      - d3en.12xlarge
+      - f1.2xlarge
+      - f1.4xlarge
+      - f1.16xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - m5.12xlarge
+      - m5.16xlarge
+      - m5.24xlarge
+      - m5.metal
+      - m5a.large
+      - m5a.xlarge
+      - m5a.2xlarge
+      - m5a.4xlarge
+      - m5a.8xlarge
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge
+      - m5d.large
+      - m5d.xlarge
+      - m5d.2xlarge
+      - m5d.4xlarge
+      - m5d.8xlarge
+      - m5d.12xlarge
+      - m5d.16xlarge
+      - m5d.24xlarge
+      - m5d.metal
+      - m5ad.large
+      - m5ad.xlarge
+      - m5ad.2xlarge
+      - m5ad.4xlarge
+      - m5ad.8xlarge
+      - m5ad.12xlarge
+      - m5ad.16xlarge
+      - m5ad.24xlarge
+      - m5zn.large
+      - m5zn.xlarge
+      - m5zn.2xlarge
+      - m5zn.3xlarge
+      - m5zn.6xlarge
+      - m5zn.12xlarge
+      - m5zn.metal
+      - h1.2xlarge
+      - h1.4xlarge
+      - h1.8xlarge
+      - h1.16xlarge
+      - z1d.large
+      - z1d.xlarge
+      - z1d.2xlarge
+      - z1d.3xlarge
+      - z1d.6xlarge
+      - z1d.12xlarge
+      - z1d.metal
+      - u-6tb1.metal
+      - u-9tb1.metal
+      - u-12tb1.metal
+      - u-18tb1.metal
+      - u-24tb1.metal
+      - inf1.xlarge
+      - inf1.2xlarge
+      - inf1.6xlarge
+      - inf1.24xlarge
+    ConstraintDescription: Must be a valid EC2 instance type. Default is t2.micro
+    Default: t2.micro
+    Description: Select instance type
+    Type: String
+  KeyName:
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  ImageId:
+    AllowedPattern: '^ami-[0-9a-f]+$||^$'
+    Description: >-
+      The image ID to be used to build the EC2 Instance.  (OPTIONAL) - If
+      omitted, the default AMI source will be determined by the AMI Lookup
+      Source parameter.  If the Parameter Store source is used, instance(s) may
+      be rebuilt during future stack updates if that value is changed.  To
+      prevent this behavior, be sure to provide an AMI id in this field.
+    Type: String
+    Default: ''
+  BackupsEnabled:
+    Default: 'False'
+    Description: 'Value of the ''Backup'' tag, used to assign the EBSSnapper configuration.'
+    Type: String
+  EBSOptimized:
+    AllowedValues:
+      - 'False'
+      - 'True'
+    Default: 'False'
+    Description: Use EBS Optimized.
+    Type: String
+  PlacementTenancy:
+    AllowedValues:
+      - dedicated
+      - default
+      - host
+    Default: default
+    Description: The placement tenancy for EC2 devices
+    Type: String
+  CWLogRetention:
+    AllowedValues:
+      - '1'
+      - '3'
+      - '5'
+      - '7'
+      - '14'
+      - '30'
+      - '60'
+      - '90'
+      - '120'
+      - '150'
+      - '180'
+      - '365'
+      - '400'
+      - '545'
+      - '731'
+      - '1827'
+      - '3653'
+    ConstraintDescription: Must be a valid integer.
+    Default: '30'
+    Description: The number of days to retain Cloudwatch Logs for this instance.
+    Type: String
+  PatchingGroupTag:
+    Default: ''
+    Description: Group ID to be used by System Manager for Patching (OPTIONAL)
+    Type: String
+  SSMInventoryTag:
+    AllowedValues:
+      - 'False'
+      - 'True'
+    Default: 'True'
+    Description: Determines whether Instance is tracked via System Manager Inventory.
+    Type: String
+  Environment:
+    AllowedValues:
+      - Development
+      - Integration
+      - PreProduction
+      - Production
+      - QA
+      - Staging
+      - Test
+    Default: Development
+    Description: >-
+      Application environment for which this network is being created. e.g.
+      Development/Production.
+    Type: String
+  InstanceRoleManagedPolicyArns:
+    Default: ''
+    Description: >-
+      A comma delimited list of IAM policy ARNs for the InstanceRole IAM role. 
+      IAM ARNs can be found within the Policies section of the AWS IAM console.
+    Type: String
+  CustomCWConfig:
+    Default: ''
+    Description: >-
+      The name of an existing parameter store object containing a custom
+      cloudwatch configuration.
+    Type: String
+  CustomSSMSteps:
+    Default: ''
+    Description: >-
+      A comma delimited list of up to 5 SSM document names (not URIs) to insert
+      into the instance bootstrapping. (OPTIONAL)
+    Type: CommaDelimitedList
+  CustomSSMStepCount:
+    AllowedValues:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+    Default: '0'
+    Description: The number of SSM documents to insert into the instance bootstrapping.
+    Type: String
+  SSMRefreshFrequency:
+    AllowedPattern: '^$|^rate\(\d{1,2} (minutes|hours?|days?)\)$|^cron\((\S+ ){5}\S+\)$'
+    ConstraintDescription: >-
+      Must provide a valid rate or cron statement.  For more details, See
+      https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-cron.html 
+    Default: rate(1 day)
+    Description: >-
+      A cron or rate pattern to define the SSM Association refresh schedule,
+      defaulting to once per day.  See
+      https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-cron.html
+      for more details.  Schedule can be disabled by providing an empty string.
+    Type: String
+  Iops:
+    Default: '0'
+    Description: >-
+      Iops value required for use with io1 EBS volumes. This value should be 3
+      times the EBS volume size
+    Type: Number
+  EbsVolumeSize:
+    AllowedPattern: '^[1-9][0-9]*$'
+    ConstraintDescription: Must be a numeric value.
+    Default: '60'
+    Description: Select EBS Volume Size in GB.
+    Type: String
+  EbsVolumeType:
+    AllowedValues:
+      - io1
+      - standard
+      - gp2
+    Default: gp2
+    Description: Select EBS Volume Type.
+    Type: String
+  EncryptRootEBSVolume:
+    AllowedValues:
+      - 'False'
+      - 'True'
+    Default: 'False'
+    Description: Specifies whether to encrypt the root EBS volume.
+    Type: String
+  IopsVolume2:
+    Default: '0'
+    Description: >-
+      Iops value required for use with io1 on secondary EBS volumes. This value
+      should be 3 times the secondary EBS volume size
+    Type: Number
+  Ebs2VolumeSize:
+    AllowedPattern: '^[1-9][0-9]*$||^$'
+    ConstraintDescription: Must be a numeric value or empty string.
+    Default: ''
+    Description: Select Second EBS Volume Size in GB.
+    Type: String
+  Ebs2VolumeType:
+    AllowedValues:
+      - io1
+      - standard
+      - gp2
+    Default: gp2
+    Description: Select EBS Volume Type.
+    Type: String
+  EncryptEBSVolume:
+    AllowedValues:
+      - 'False'
+      - 'True'
+    Default: 'False'
+    Description: Specifies whether to encrypt the EBS volume.
+    Type: String
+  ScalingMin:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '1'
+    Description: The minimum size of the Auto Scaling group.
+    Type: String
+  ScalingMax:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '2'
+    Description: The maximum size of the Auto Scaling group.
+    Type: String
+  ScalingTermination:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '1'
+    Description: The maximum number of instances that are terminated at a given time.
+    Type: String
+  ScalingCreateTimeOut:
+    AllowedPattern: '^([0-9]+[HMS]){1,3}$'
+    ConstraintDescription: '#H#M#S where each # is the number of hours or minutes or seconds'
+    Default: 20M
+    Description: >-
+      Time to wait for the number of signals equal to ScalingMin. H/M/S
+      Hours/Minutes/Seconds
+    Type: String
+  ScalingUpdateTimeOut:
+    AllowedPattern: '^([0-9]+[HMS]){1,3}$'
+    ConstraintDescription: '#H#M#S where each # is the number of hours or minutes or seconds'
+    Default: 20M
+    Description: >-
+      Post update pause before additional Auto Scale resource changes. H/M/S
+      Hours/Minutes/Seconds
+    Type: String
+  EC2ScaleUpCooldown:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '60'
+    Description: Time in seconds before any further trigger-related scaling can occur.
+    Type: String
+  EC2ScaleUpAdjustment:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '1'
+    Description: Number of EC2 instances to scale up by at a time.
+    Type: String
+  EC2ScaleDownCooldown:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '60'
+    Description: Time in seconds before any further trigger-related scaling can occur.
+    Type: String
+  EC2ScaleDownAdjustment:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '1'
+    Description: Number of EC2 instances to scale down by at a time.
+    Type: String
+  SpotPrice:
+    Default: ''
+    Description: >-
+      The maximum hourly price to be paid for any Spot Instance launched to
+      fulfill the request. Spot Instances are launched when the price you
+      specify exceeds the current Spot market price. For more information, see
+      Launching Spot Instances
+      https://docs.aws.amazon.com/autoscaling/ec2/userguide/asg-launch-spot-instances.html
+      in your Auto Scaling Group in the Amazon EC2 Auto Scaling User Guide. If a
+      Spot price is set, then the Auto Scaling group will only launch when the
+      Spot price has been met, regardless of the setting in the Auto Scaling
+      group's DesiredCapacity. NOTE: When you change your Spot price by creating
+      a new launch configuration, running instances will continue to run as long
+      as the Spot price for those running instances is higher than the current
+      Spot market price.
+    Type: String
+  HealthCheckGracePeriod:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '300'
+    Description: Number of seconds grace during which no autoscaling actions will be taken.
+    Type: String
+  HealthCheckType:
+    AllowedValues:
+      - EC2
+      - ELB
+    Default: EC2
+    Description: Define the type of healthcheck for the AutoScaling group.
+    Type: String
+  MinInstancesInService:
+    Default: '0'
+    Description: >-
+      Specifies the minimum number of instances that must be in service within
+      the Auto Scaling group while AWS CloudFormation updates old instances.  A
+      value of 0 will ensure that at least the ASGs minimum instance count stays
+      in service during all updates.
+    Type: Number
+  TerminatedInstances:
+    Default: '30'
+    Description: >-
+      Specifies the maximum number of instances that can be terminated in a six
+      hour period without generating a Cloudwatch Alarm.
+    Type: Number
+  ScalingNotificationTopic:
+    AllowedPattern: >-
+      ^arn:aws:sns:(us|eu|ap|sa|ca)-(east|west|north|south|southeast|northeast|central)-[1-9]:[0-9]{12}:.+$||^$
+    ConstraintDescription: Must be a valid SNS ARN.
+    Default: ''
+    Description: SNS Topic ARN to notify if there are any scaling operations. OPTIONAL
+    Type: String
+  TargetGroupARNs:
+    Default: ''
+    Description: >-
+      A list of Amazon Resource Names (ARN) of target groups to associate with
+      the Auto Scaling group.
+    Type: CommaDelimitedList
+  LoadBalancerNames:
+    Default: ''
+    Description: A list of Classic load balancers associated with this Auto Scaling group.
+    Type: CommaDelimitedList
+  CwScalingMetric:
+    AllowedValues:
+      - CPUUtilization
+      - NetworkIn
+      - NetworkOut
+    Default: CPUUtilization
+    Description: Select the metric to be used for scaling.
+    Type: String
+  CwHighOperator:
+    AllowedValues:
+      - GreaterThanOrEqualToThreshold
+      - GreaterThanThreshold
+      - LessThanThreshold
+      - LessThanOrEqualToThreshold
+    Default: GreaterThanThreshold
+    Description: Math operator used by CloudWatch for alarms and triggers.
+    Type: String
+  CwHighPeriod:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '60'
+    Description: >-
+      Time the specified statistic is applied. Must be in seconds that is also a
+      multiple of 60.
+    Type: String
+  CwHighThreshold:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '60'
+    Description: The value against which the specified statistic is compared.
+    Type: String
+  CwPeriodEvaluations:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '3'
+    Description: >-
+      The number of periods over which data is compared to the specified
+      threshold.
+    Type: String
+  CwLowOperator:
+    AllowedValues:
+      - GreaterThanOrEqualToThreshold
+      - GreaterThanThreshold
+      - LessThanThreshold
+      - LessThanOrEqualToThreshold
+    Default: LessThanThreshold
+    Description: Math operator used by CloudWatch for alarms and triggers.
+    Type: String
+  CwLowPeriod:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '300'
+    Description: >-
+      Time the specified statistic is applied. Must be in seconds that is also a
+      multiple of 60.
+    Type: String
+  CwLowThreshold:
+    AllowedPattern: '([0-9]+)'
+    ConstraintDescription: Must be a valid integer.
+    Default: '30'
+    Description: The value against which the specified statistic is compared.
+    Type: String
+  ParamStoreAmiPath:
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs
+    Description: Location within AWS parameter store containing the desired AMI ID.
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+  DefaultAmiSource:
+    AllowedValues:
+      - Mapping
+      - Parameter Store
+    Default: Mapping
+    Description: >-
+      Determines if the default AMI for this stack will be retrieved from the
+      CloudFormation Mapping or from SSM Parameter Store.  This value is ignored
+      if an AMI id is explicitly provided.
+    Type: String
+  EnableRackspaceTicket:
+    AllowedValues:
+      - 'False'
+      - 'True'
+    Default: 'False'
+    Description: Specifies whether alarms will generate Rackspace tickets
+    Type: String
+Conditions:
+  InstanceRolePoliciesSet: !Not 
+    - !Equals 
+      - !Ref InstanceRoleManagedPolicyArns
+      - ''
+  EnableCustomCWConfig: !Not 
+    - !Equals 
+      - !Ref CustomCWConfig
+      - ''
+  EnableCustomSSMStep1: !Or 
+    - !Equals 
+      - !Ref CustomSSMStepCount
+      - '1'
+    - !Condition EnableCustomSSMStep2
+  EnableCustomSSMStep2: !Or 
+    - !Equals 
+      - !Ref CustomSSMStepCount
+      - '2'
+    - !Condition EnableCustomSSMStep3
+  EnableCustomSSMStep3: !Or 
+    - !Equals 
+      - !Ref CustomSSMStepCount
+      - '3'
+    - !Condition EnableCustomSSMStep4
+  EnableCustomSSMStep4: !Or 
+    - !Equals 
+      - !Ref CustomSSMStepCount
+      - '4'
+    - !Condition EnableCustomSSMStep5
+  EnableCustomSSMStep5: !Equals 
+    - !Ref CustomSSMStepCount
+    - 5
+  SetSSMSchedule: !Not 
+    - !Equals 
+      - !Ref SSMRefreshFrequency
+      - ''
+  IopsEnabled: !Equals 
+    - !Ref EbsVolumeType
+    - io1
+  isRootEBSEncrypted: !Equals 
+    - !Ref EncryptRootEBSVolume
+    - 'True'
+  IopsEnabled2: !Equals 
+    - !Ref Ebs2VolumeType
+    - io1
+  isEBSEncrypted: !Equals 
+    - !Ref EncryptEBSVolume
+    - 'True'
+  is2ndEBSVolume: !Not 
+    - !Equals 
+      - !Ref Ebs2VolumeSize
+      - ''
+  SetSpotPrice: !Not 
+    - !Equals 
+      - !Ref SpotPrice
+      - ''
+  isMinInstance: !Not 
+    - !Equals 
+      - !Ref MinInstancesInService
+      - '0'
+  isScalingNotification: !Not 
+    - !Equals 
+      - !Ref ScalingNotificationTopic
+      - ''
+  isELBv1: !Not 
+    - !Equals 
+      - !Select 
+        - '0'
+        - !Ref LoadBalancerNames
+      - ''
+  isELBv2: !Not 
+    - !Equals 
+      - !Select 
+        - '0'
+        - !Ref TargetGroupARNs
+      - ''
+  isImageId: !Not 
+    - !Equals 
+      - !Ref ImageId
+      - ''
+  UseAmiMapping: !Equals 
+    - !Ref DefaultAmiSource
+    - Mapping
+  RackspaceAlarmsEnabled: !Equals 
+    - !Ref EnableRackspaceTicket
+    - 'True'
+Mappings:
+  AWSRegionArch2AMI:
+    ap-northeast-1:
+      '64': ami-0e1109ab72ed218cb
+    ap-northeast-2:
+      '64': ami-0a094074074b59e5c
+    ap-south-1:
+      '64': ami-0953277fb8715b50b
+    ap-southeast-1:
+      '64': ami-01cfc9c0f8b3c9e0a
+    ap-southeast-2:
+      '64': ami-0e6790f3f782d66d9
+    ca-central-1:
+      '64': ami-096b2a1ef0f5daf68
+    eu-central-1:
+      '64': ami-0fb02dcdd38048fb9
+    eu-north-1:
+      '64': ami-093cceaef3407e0a0
+    eu-west-1:
+      '64': ami-0aea05cb606465b8a
+    eu-west-2:
+      '64': ami-0c216af53e13f3f89
+    eu-west-3:
+      '64': ami-06115bf44100c57fd
+    sa-east-1:
+      '64': ami-0db05362bd675e20b
+    us-east-1:
+      '64': ami-0d5ae01b1fcf7c45c
+    us-east-2:
+      '64': ami-0360cfdb3023a24c4
+    us-west-1:
+      '64': ami-08e0935169bd9b30c
+    us-west-2:
+      '64': ami-0ee22bf33fb621b03
+Resources:
+  InstanceRole:
+    Properties:
+      ManagedPolicyArns: !Split 
+        - ','
+        - !Join 
+          - ','
+          - - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+            - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+            - 'arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess'
+            - !If 
+              - InstanceRolePoliciesSet
+              - !Ref InstanceRoleManagedPolicyArns
+              - !Ref 'AWS::NoValue'
+      Path: /
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service: ec2.amazonaws.com
+    Type: 'AWS::IAM::Role'
+  InstanceRolePolicies:
+    Properties:
+      PolicyName: InstanceRole
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 'cloudformation:Describe*'
+            Resource: '*'
+            Effect: Allow
+          - Action:
+              - 'ssm:CreateAssociation'
+              - 'ssm:DescribeInstanceInformation'
+              - 'ssm:GetParameter'
+            Resource: '*'
+            Effect: Allow
+          - Action:
+              - 'cloudwatch:GetMetricStatistics'
+              - 'cloudwatch:ListMetrics'
+              - 'cloudwatch:PutMetricData'
+              - 'ec2:DescribeTags'
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:DescribeLogStreams'
+              - 'logs:PutLogEvents'
+            Resource: '*'
+            Effect: Allow
+          - Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetEncryptionConfiguration'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:ListMultipartUploadParts'
+              - 's3:PutObject'
+            Resource: 'arn:aws:s3:::rackspace-*/*'
+            Effect: Allow
+      Roles:
+        - !Ref InstanceRole
+    Type: 'AWS::IAM::Policy'
+  InstanceRoleInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+    Type: 'AWS::IAM::InstanceProfile'
+  SystemLogs:
+    Properties:
+      RetentionInDays: !Ref CWLogRetention
+    Type: 'AWS::Logs::LogGroup'
+  ApplicationLogs:
+    Properties:
+      RetentionInDays: !Ref CWLogRetention
+    Type: 'AWS::Logs::LogGroup'
+  CWAgentParam:
+    Properties:
+      Name: !Sub '${AWS::StackName}-CWAgent'
+      Description: !Sub '${AWS::StackName} Cloudwatch Agent configuration'
+      Type: String
+      Value: !Join 
+        - ''
+        - - >-
+            {"metrics": {"append_dimensions": {"InstanceId":
+            "${aws:InstanceId}", "AutoScalingGroupName":
+            "${aws:AutoScalingGroupName}"}, "aggregation_dimensions":
+            [["InstanceId"], ["AutoScalingGroupName"], ["InstanceId",
+            "device"]], "namespace": "System/Linux", "metrics_collected":
+            {"mem": {"metrics_collection_interval": 60, "measurement":
+            [{"rename": "MemoryUtilization", "name": "mem_used_percent", "unit":
+            "Percent"}]}, "disk": {"ignore_file_system_types": ["devtmpfs",
+            "tmpfs", "devfs", "rootfs", "squashfs"],
+            "metrics_collection_interval": 60, "resources": ["*"],
+            "measurement": ["used_percent"]}}}, "logs": {"logs_collected":
+            {"files": {"collect_list": [{"file_path":
+            "/var/log/cloud-init-output.log", "log_group_name": "
+          - !Ref SystemLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/cloud-init-output.log"},
+            {"timestamp_format": "%b %d %H:%M:%S", "file_path":
+            "/var/log/cloud-init.log", "log_group_name": "
+          - !Ref SystemLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/cloud-init.log"},
+            {"timestamp_format": "%Y-%m-%d %H:%M:%S",
+            "multi_line_start_pattern": "{timestamp_format}", "file_path":
+            "/var/log/amazon/ssm/amazon-ssm-agent.log", "log_group_name": "
+          - !Ref SystemLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/amazon-ssm-agent.log"},
+            {"timestamp_format": "%Y-%m-%d %H:%M:%S",
+            "multi_line_start_pattern": "{timestamp_format}", "file_path":
+            "/var/log/amazon/ssm/errors.log", "log_group_name": "
+          - !Ref SystemLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/amazon-ssm-errors.log"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/httpd/access*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/httpd-access"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/httpd/error*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/httpd-error"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/apache2/access*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/apache2-access"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/apache2/error*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/apache2-error"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/nginx/access*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >-
+            ", "log_stream_name": "{instance_id}/nginx-access"},
+            {"timestamp_format": "%d/%b/%Y:%H:%M:%S", "file_path":
+            "/var/log/nginx/error*", "log_group_name": "
+          - !Ref ApplicationLogs
+          - >
+            ", "log_stream_name": "{instance_id}/nginx-error"}]}},
+            "force_flush_interval": 60}}
+    Type: 'AWS::SSM::Parameter'
+  SSMDocument:
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: SSM Document for instance configuration.
+        parameters: {}
+        mainSteps:
+          - action: 'aws:runShellScript'
+            name: BusyWait
+            timeoutSeconds: 300
+            precondition:
+              StringEquals:
+                - platformType
+                - Linux
+            inputs:
+              runCommand:
+                - '#!/bin/bash -e'
+                - TIMEOUT=300
+                - SLEEP_TIME=15
+                - CLOUDINIT_FINISHED='/var/lib/cloud/instance/boot-finished'
+                - INIT_PROC_FILE='/proc/1/exe'
+                - timer=0
+                - '# all distros'
+                - 'until [[ -f $CLOUDINIT_FINISHED ]]; do'
+                - '  [[ $timer -ge $TIMEOUT ]] && echo "Timeout exceeded" && exit 1'
+                - '  echo "Blocking until cloud-init has completed"'
+                - '  sleep $SLEEP_TIME'
+                - '  timer=$((timer+SLEEP_TIME))'
+                - done
+                - echo "Cloud-init completed"
+                - ''
+                - '# systemd only'
+                - >-
+                  # if systemd is our init system it will be soft linked in pid
+                  1's namespace
+                - if ls -l $INIT_PROC_FILE | grep -qs systemd; then
+                - '  timer=0'
+                - '  until systemctl is-system-running | grep -qsE ''running|degraded''; do'
+                - '    [[ $timer  -ge $TIMEOUT ]] && echo "Timeout exceeded" && exit 1'
+                - '    echo "Blocking until systemd has completed"'
+                - '    sleep $SLEEP_TIME'
+                - '    timer=$((timer+SLEEP_TIME))'
+                - '  done'
+                - '  echo "Systemd boot completed"'
+                - fi
+          - action: 'aws:runDocument'
+            name: InstallCWAgent
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: AWS-ConfigureAWSPackage
+              documentParameters:
+                action: Install
+                name: AmazonCloudWatchAgent
+          - action: 'aws:runDocument'
+            name: ConfigureCWAgent
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: AmazonCloudWatch-ManageAgent
+              documentParameters:
+                action: configure
+                name: AmazonCloudWatchAgent
+                optionalConfigurationSource: ssm
+                optionalConfigurationLocation: !If 
+                  - EnableCustomCWConfig
+                  - !Ref CustomCWConfig
+                  - !Ref CWAgentParam
+                optionalRestart: 'yes'
+          - action: 'aws:runDocument'
+            name: SetupTimeSync
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: !Sub >-
+                arn:aws:ssm:${AWS::Region}:507897595701:document/Rack-ConfigureAWSTimeSync
+          - action: 'aws:runDocument'
+            name: DiagnosticTools
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: !Sub >-
+                arn:aws:ssm:${AWS::Region}:507897595701:document/Rack-Install_Package
+              documentParameters:
+                Packages: sysstat ltrace strace iptraf tcpdump
+          - action: 'aws:runDocument'
+            name: SetMotd
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: !Sub 'arn:aws:ssm:${AWS::Region}:507897595701:document/Rack-SetMotd'
+          - !If 
+            - EnableCustomSSMStep1
+            - action: 'aws:runDocument'
+              name: CustomStep1
+              timeoutSeconds: 300
+              inputs:
+                documentType: SSMDocument
+                documentPath: !Select 
+                  - '0'
+                  - !Ref CustomSSMSteps
+            - !Ref 'AWS::NoValue'
+          - !If 
+            - EnableCustomSSMStep2
+            - action: 'aws:runDocument'
+              name: CustomStep2
+              timeoutSeconds: 300
+              inputs:
+                documentType: SSMDocument
+                documentPath: !Select 
+                  - '1'
+                  - !Ref CustomSSMSteps
+            - !Ref 'AWS::NoValue'
+          - !If 
+            - EnableCustomSSMStep3
+            - action: 'aws:runDocument'
+              name: CustomStep3
+              timeoutSeconds: 300
+              inputs:
+                documentType: SSMDocument
+                documentPath: !Select 
+                  - '2'
+                  - !Ref CustomSSMSteps
+            - !Ref 'AWS::NoValue'
+          - !If 
+            - EnableCustomSSMStep4
+            - action: 'aws:runDocument'
+              name: CustomStep4
+              timeoutSeconds: 300
+              inputs:
+                documentType: SSMDocument
+                documentPath: !Select 
+                  - '3'
+                  - !Ref CustomSSMSteps
+            - !Ref 'AWS::NoValue'
+          - !If 
+            - EnableCustomSSMStep5
+            - action: 'aws:runDocument'
+              name: CustomStep5
+              timeoutSeconds: 300
+              inputs:
+                documentType: SSMDocument
+                documentPath: !Select 
+                  - '4'
+                  - !Ref CustomSSMSteps
+            - !Ref 'AWS::NoValue'
+          - action: 'aws:runShellScript'
+            name: SignalStack
+            precondition:
+              StringEquals:
+                - platformType
+                - Linux
+            inputs:
+              runCommand:
+                - !Sub >-
+                  /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName}
+                  --resource AutoScaleGrp --region ${AWS::Region} || exit 0
+          - action: 'aws:runDocument'
+            name: UpdateSSMAgent
+            timeoutSeconds: 300
+            inputs:
+              documentType: SSMDocument
+              documentPath: AWS-UpdateSSMAgent
+      DocumentType: Command
+    Type: 'AWS::SSM::Document'
+  SSMAssociation:
+    Properties:
+      Name: !Ref SSMDocument
+      Targets:
+        - Key: 'tag:aws:cloudformation:stack-id'
+          Values:
+            - !Ref 'AWS::StackId'
+      ScheduleExpression: !If 
+        - SetSSMSchedule
+        - !Ref SSMRefreshFrequency
+        - !Ref 'AWS::NoValue'
+    Type: 'AWS::SSM::Association'
+  LaunchTemplate:
+    Properties:
+      LaunchTemplateData:
+        Monitoring:
+          Enabled: 'true'
+        Placement:
+          Tenancy: !Ref PlacementTenancy
+        SecurityGroupIds: !Ref SecurityGroupList
+        InstanceMarketOptions: !If 
+          - SetSpotPrice
+          - MarketType: spot
+            SpotOptions:
+              MaxPrice: !Ref SpotPrice
+          - !Ref 'AWS::NoValue'
+        EbsOptimized: !Ref EBSOptimized
+        ImageId: !If 
+          - isImageId
+          - !Ref ImageId
+          - !If 
+            - UseAmiMapping
+            - !FindInMap 
+              - AWSRegionArch2AMI
+              - !Ref 'AWS::Region'
+              - '64'
+            - !Ref ParamStoreAmiPath
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Arn: !GetAtt 
+            - InstanceRoleInstanceProfile
+            - Arn
+        UserData: !Base64 
+          'Fn::Join':
+            - ''
+            - - |
+                #!/bin/bash -xe
+              - |
+                exec 1> >(logger -s -t $(basename $0)) 2>&1
+              - |
+                yum install -y aws-cfn-bootstrap
+              - |
+                yum update -y aws-cfn-bootstrap
+              - |+
+
+              - |
+                # Ensure SSM installed on Amazon Linux
+              - |
+                # in cases where it is not available / removed
+              - |
+                ssm_running=$( ps -ef | grep [a]mazon-ssm-agent | wc -l )
+              - |
+                if [[ $ssm_running != "0" ]]; then
+              - |2
+                    echo -e "amazon-ssm-agent already running"
+              - |
+                else
+              - |2
+                    if [[ -r "/tmp/ssm_agent_install" ]]; then : ;
+              - |2
+                    else mkdir -p /tmp/ssm_agent_install; fi
+              - '    curl https://s3.'
+              - !Ref 'AWS::Region'
+              - .amazonaws.com/amazon-ssm-
+              - !Ref 'AWS::Region'
+              - >
+                /latest/linux_amd64/amazon-ssm-agent.rpm -o
+                /tmp/ssm_agent_install/amazon-ssm-agent.rpm
+              - |2
+                    rpm -Uvh /tmp/ssm_agent_install/amazon-ssm-agent.rpm
+              - |2
+                    ssm_running=$( ps -ef | grep [a]mazon-ssm-agent | wc -l )
+              - |2
+                    # Amazon Linux 2
+              - |2
+                    systemctl=$( command -v systemctl | wc -l )
+              - |2
+                    if [[ $systemctl != "0" ]]; then
+              - |2
+                        systemctl enable amazon-ssm-agent
+              - |2
+                        if [[ $ssm_running == "0" ]]; then
+              - |2
+                            systemctl start amazon-ssm-agent
+              - |2
+                        fi
+              - |2
+                    else
+              - |2
+                        # Amazon Linux
+              - |2
+                        if [[ $ssm_running == "0" ]]; then
+              - |2
+                            start amazon-ssm-agent
+              - |2
+                        fi
+              - |2
+                    fi
+              - |
+                fi
+              - |+
+
+              - |
+                # Helper function
+              - |
+                function exit_cfn_signal {
+              - |2
+                  exit_status=$?
+              - |2
+                  if [[ $exit_status != "0" && -e /opt/aws/bin/cfn-signal ]]; then
+              - '    /opt/aws/bin/cfn-signal -e $exit_status --stack '
+              - !Ref 'AWS::StackName'
+              - ' --resource AutoScaleGrp --region '
+              - !Ref 'AWS::Region'
+              - |+
+
+              - |2
+                  fi
+              - |2
+                  exit $exit_status
+              - |
+                }
+              - |
+                trap exit_cfn_signal TERM EXIT
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: 'true'
+              Iops: !If 
+                - IopsEnabled
+                - !Ref Iops
+                - !Ref 'AWS::NoValue'
+              Encrypted: !If 
+                - isRootEBSEncrypted
+                - 'true'
+                - !Ref 'AWS::NoValue'
+              VolumeSize: !Ref EbsVolumeSize
+              VolumeType: !Ref EbsVolumeType
+          - !If 
+            - is2ndEBSVolume
+            - DeviceName: /dev/sdf
+              Ebs:
+                DeleteOnTermination: 'true'
+                Encrypted: !If 
+                  - isEBSEncrypted
+                  - 'true'
+                  - !Ref 'AWS::NoValue'
+                Iops: !If 
+                  - IopsEnabled2
+                  - !Ref IopsVolume2
+                  - !Ref 'AWS::NoValue'
+                VolumeSize: !Ref Ebs2VolumeSize
+                VolumeType: !Ref Ebs2VolumeType
+            - !Ref 'AWS::NoValue'
+    Type: 'AWS::EC2::LaunchTemplate'
+  AutoScaleGrp:
+    Properties:
+      HealthCheckGracePeriod: !Ref HealthCheckGracePeriod
+      HealthCheckType: !Ref HealthCheckType
+      LoadBalancerNames: !If 
+        - isELBv1
+        - !Ref LoadBalancerNames
+        - !Ref 'AWS::NoValue'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 
+          - LaunchTemplate
+          - LatestVersionNumber
+      MinSize: !Ref ScalingMin
+      MaxSize: !Ref ScalingMax
+      MetricsCollection:
+        - Granularity: 1Minute
+      NotificationConfigurations:
+        - !If 
+          - isScalingNotification
+          - NotificationTypes:
+              - 'autoscaling:EC2_INSTANCE_LAUNCH'
+              - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+              - 'autoscaling:EC2_INSTANCE_TERMINATE'
+              - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+            TopicARN: !Ref ScalingNotificationTopic
+          - !Ref 'AWS::NoValue'
+        - NotificationTypes:
+            - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+            - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+          TopicARN: !Sub >-
+            arn:aws:sns:${AWS::Region}:${AWS::AccountId}:rackspace-support-emergency
+      Tags:
+        - Key: Backup
+          Value: !Ref BackupsEnabled
+          PropagateAtLaunch: 'true'
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: 'true'
+        - Key: Name
+          Value: !Ref InstanceName
+          PropagateAtLaunch: 'true'
+        - Key: Patch Group
+          Value: !Ref PatchingGroupTag
+          PropagateAtLaunch: 'true'
+        - Key: SSMInventory
+          Value: !Ref SSMInventoryTag
+          PropagateAtLaunch: 'true'
+        - Key: ServiceProvider
+          Value: Rackspace
+          PropagateAtLaunch: 'true'
+      TargetGroupARNs: !If 
+        - isELBv2
+        - !Ref TargetGroupARNs
+        - !Ref 'AWS::NoValue'
+      VPCZoneIdentifier: !Ref Subnets
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    CreationPolicy:
+      ResourceSignal:
+        Count: !Ref ScalingMin
+        Timeout: !Sub 'PT${ScalingCreateTimeOut}'
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: !Ref ScalingTermination
+        MinInstancesInService: !If 
+          - isMinInstance
+          - !Ref MinInstancesInService
+          - !Ref ScalingMin
+        PauseTime: !Sub 'PT${ScalingUpdateTimeOut}'
+        SuspendProcesses:
+          - ScheduledActions
+          - ReplaceUnhealthy
+          - AlarmNotification
+          - AZRebalance
+        WaitOnResourceSignals: 'true'
+  EC2ScaleUpPolicy:
+    Properties:
+      AutoScalingGroupName: !Ref AutoScaleGrp
+      AdjustmentType: ChangeInCapacity
+      Cooldown: !Ref EC2ScaleUpCooldown
+      ScalingAdjustment: !Ref EC2ScaleUpAdjustment
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+  EC2ScaleDownPolicy:
+    Properties:
+      AutoScalingGroupName: !Ref AutoScaleGrp
+      AdjustmentType: ChangeInCapacity
+      Cooldown: !Ref EC2ScaleDownCooldown
+      ScalingAdjustment: !Sub '-${EC2ScaleDownAdjustment}'
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+  GroupTerminatingInstances:
+    Properties:
+      AlarmDescription: !Sub >-
+        Over ${TerminatedInstances} instances terminated in last 6 hours,
+        generating ticket to investigate.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScaleGrp
+      EvaluationPeriods: '1'
+      MetricName: GroupTerminatingInstances
+      Namespace: AWS/AutoScaling
+      Period: '21600'
+      Statistic: Sum
+      Threshold: !Ref TerminatedInstances
+      TreatMissingData: ignore
+      Unit: Count
+      AlarmActions:
+        - !If 
+          - RackspaceAlarmsEnabled
+          - !Sub >-
+            arn:aws:sns:${AWS::Region}:${AWS::AccountId}:rackspace-support-emergency
+          - !Ref 'AWS::NoValue'
+      OKActions:
+        - !If 
+          - RackspaceAlarmsEnabled
+          - !Sub >-
+            arn:aws:sns:${AWS::Region}:${AWS::AccountId}:rackspace-support-emergency
+          - !Ref 'AWS::NoValue'
+    Type: 'AWS::CloudWatch::Alarm'
+  ScaleAlarmLow:
+    Properties:
+      AlarmActions:
+        - !Ref EC2ScaleDownPolicy
+      AlarmDescription: !Sub >-
+        Scale-down if ${CwScalingMetric} ${CwLowOperator} ${CwLowThreshold}% for
+        ${CwLowPeriod} seconds ${CwPeriodEvaluations} times.
+      ComparisonOperator: !Ref CwLowOperator
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScaleGrp
+      EvaluationPeriods: !Ref CwPeriodEvaluations
+      MetricName: !Ref CwScalingMetric
+      Namespace: AWS/EC2
+      Period: !Ref CwLowPeriod
+      Statistic: Average
+      Threshold: !Ref CwLowThreshold
+    Type: 'AWS::CloudWatch::Alarm'
+  ScaleAlarmHigh:
+    Properties:
+      AlarmActions:
+        - !Ref EC2ScaleUpPolicy
+      AlarmDescription: !Sub >-
+        Scale-up if ${CwScalingMetric} ${CwHighOperator} ${CwHighThreshold}% for
+        ${CwHighPeriod} seconds ${CwPeriodEvaluations} times.
+      ComparisonOperator: !Ref CwHighOperator
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScaleGrp
+      EvaluationPeriods: !Ref CwPeriodEvaluations
+      MetricName: !Ref CwScalingMetric
+      Namespace: AWS/EC2
+      Period: !Ref CwHighPeriod
+      Statistic: Average
+      Threshold: !Ref CwHighThreshold
+    Type: 'AWS::CloudWatch::Alarm'
+Outputs:
+  GroupName:
+    Description: Autoscale Group Name
+    Value: !Ref AutoScaleGrp

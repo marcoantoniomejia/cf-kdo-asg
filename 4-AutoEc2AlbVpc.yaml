@@ -1,0 +1,231 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access into the Onica Web Servers
+    Type: AWS::EC2::KeyPair::KeyName
+Resources:
+  VPCOnica:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.123.0/24
+      Tags:
+        - Key: Name
+          Value: onica1
+  Sub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1a"
+      CidrBlock: 192.168.123.0/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub1
+      VpcId: !Ref VPCOnica
+  Sub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1b"
+      CidrBlock: 192.168.123.16/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub2
+      VpcId: !Ref VPCOnica
+  Sub3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1c"
+      CidrBlock: 192.168.123.32/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub3
+      VpcId: !Ref VPCOnica
+  Sub4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1a"
+      CidrBlock: 192.168.123.48/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub4
+      VpcId: !Ref VPCOnica
+  Sub5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1b"
+      CidrBlock: 192.168.123.64/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub5
+      VpcId: !Ref VPCOnica
+  Sub6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1c"
+      CidrBlock: 192.168.123.80/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub6
+      VpcId: !Ref VPCOnica
+  InternetGatewayOnica:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGOnica
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGatewayOnica
+      VpcId: !Ref VPCOnica
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCOnica
+      Tags:
+        - Key: Name
+          Value: rtPubOnica
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+       RouteTableId: !Ref PublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref InternetGatewayOnica
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub2
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub3
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable http access via port 80
+      GroupName: ALBSecurityGroup
+      VpcId: !Ref VPCOnica
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+  ALBOnicaWeb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ALBOnicaWeb
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - !Ref Sub1
+        - !Ref Sub2
+        - !Ref Sub3
+      Type: application
+  TGOnicaWeb:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /index.php
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      Name: TGOnicaWeb
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref VPCOnica
+  ListenerOnicaWeb:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref TGOnicaWeb
+      LoadBalancerArn: !Ref ALBOnicaWeb
+      Port: 80
+      Protocol: HTTP
+  EC2WebSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable http access via port 80 to EC2 Instance
+      GroupName: EC2WebSecurityGroup
+      VpcId: !Ref VPCOnica
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 192.168.123.0/24
+  InboundRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2WebSecurityGroup
+      IpProtocol: tcp
+      FromPort: '80'
+      ToPort: '80'
+      SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
+  LaunchTemplateOnica:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+              php: []
+          files:
+            /var/www/html/index.php:
+              content: !Sub |
+                <?php echo gethostname(); ?>
+          services:
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
+    Properties: 
+      LaunchTemplateName: tem-onica-web
+      LaunchTemplateData: 
+        ImageId: ami-0742b4e673072066f
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            DeleteOnTermination: true
+            Groups: 
+              - !Ref EC2WebSecurityGroup
+        UserData:
+          'Fn::Base64':
+            !Sub |
+            #!/bin/bash
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplateOnica  --region ${AWS::Region}       
+  AutoScalingWeb:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: OnicaWebAuto
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
+        - !Ref Sub1
+        - !Ref Sub2
+        - !Ref Sub3
+      Cooldown: 120
+      MinSize: '1'
+      MaxSize: '6'
+      DesiredCapacity: '2'
+      LaunchTemplate: 
+        LaunchTemplateName: tem-onica-web
+        Version: !GetAtt 
+          - LaunchTemplateOnica
+          - LatestVersionNumber
+      TargetGroupARNs: 
+        - !Ref TGOnicaWeb
+Outputs:
+  Website:
+    Description: The Public DNS for the LoadBalancer Instance
+    Value: !GetAtt ALBOnicaWeb.DNSName

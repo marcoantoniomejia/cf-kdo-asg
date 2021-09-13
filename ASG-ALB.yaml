@@ -1,20 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  ASG-ALB.yaml is a template to create a new Application Load Balancer and Auto Scaling Group where the docker registry mirror is placed
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Parameters:
+          - Subnets
+        Label:
+          default: Network Configuration
 Parameters:
+  VPCOnica:
+    Type: AWS::EC2::VPC::Id
+    Description: Name of an existing VPC Where the ASG and Load Balancer will be created
   KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access into the Onica Web Servers
-
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access into the docker registry mirror servers
+  Sub1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet Id for the 1st Load Balancer Subnet
+  Sub2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet Id for the 2nd Load Balancer Subnet
+  Sub3:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet Id for the 3er Load Balancer Subnet
 Resources:
   ALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Enable http access via port 80
+      GroupDescription: Enable http access via port 22
       GroupName: ALBSecurityGroup
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
+          FromPort: '22'
+          ToPort: '22'
           CidrIp: 0.0.0.0/0
-  ALBOnicaWeb:
+  ALBOnica:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: ALBOnicaWeb
@@ -26,7 +48,7 @@ Resources:
         - !Ref Sub2
         - !Ref Sub3
       Type: application
-  TGOnicaWeb:
+  TGOnica: REVISAR EL TARGET GROUP
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties: 
       HealthCheckIntervalSeconds: 30
@@ -34,7 +56,7 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 3
-      Name: TGOnicaWeb
+      Name: TGOnica
       Port: 80
       Protocol: HTTP
       TargetType: instance
@@ -122,9 +144,13 @@ Resources:
         Version: !GetAtt 
           - LaunchTemplateOnica
           - LatestVersionNumber
-      TargetGroupARNs: 
-        - !Ref TGOnicaWeb
+        TargetGroupARNs: 
+          - !Ref TGOnicaWeb
 Outputs:
   Website:
-    Description: The Public DNS for the LoadBalancer Instance
-    Value: !GetAtt ALBOnicaWeb.DNSNameType: AWS::EC2::KeyPair::KeyName
+    Description: 
+      The Public DNS for the LoadBalancer Instance
+    Value: 
+      !GetAtt 
+        - ALBOnica
+        - DNSName

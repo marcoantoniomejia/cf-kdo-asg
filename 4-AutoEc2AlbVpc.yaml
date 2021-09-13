@@ -224,7 +224,7 @@ Resources:
           - LaunchTemplateOnica
           - LatestVersionNumber
       TargetGroupARNs: 
-        - !Ref TGOnicaWeb
+          - !Ref TGOnicaWeb
 Outputs:
   Website:
     Description: The Public DNS for the LoadBalancer Instance

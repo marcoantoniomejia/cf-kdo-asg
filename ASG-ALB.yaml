@@ -32,7 +32,7 @@ Resources:
       GroupName: ALBSecurityGroup
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - IpProtocol: TCP
           FromPort: '22'
           ToPort: '22'
           CidrIp: 0.0.0.0/0
@@ -67,7 +67,7 @@ Resources:
           TargetGroupArn: !Ref TGOnica
       LoadBalancerArn: !Ref ALBOnica
       Port: 22
-      Protocol: tcp
+      Protocol: TCP
   EC2WebSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -75,7 +75,7 @@ Resources:
       GroupName: EC2WebSecurityGroup
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - IpProtocol: TCP
           FromPort: '22'
           ToPort: '22'
           CidrIp: 0.0.0.0/0
@@ -83,7 +83,7 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref EC2WebSecurityGroup
-      IpProtocol: tcp
+      IpProtocol: TCP
       FromPort: '22'
       ToPort: '22'
       SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId

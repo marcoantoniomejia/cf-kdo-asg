@@ -118,11 +118,20 @@ Resources:
             !Sub |
             #!/bin/bash
             yum update -y
-            curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
-            chmod 700 get_heml.sh
-            ./get_heml.sh
-            helm upgrade --install docker-registry-mirror docker-registry-mirror/docker-registry-mirror
-            helm upgrade --install --set proxy.username=marco,proxy.password=marco123 docker-registry-mirror docker-registry-mirror/docker-registry-mirror 
+            sudo yum install -y docker
+            sudo service docker start
+            sudo systemctl enable docker
+            sudo docker run \
+            -d \
+            -p 80:5000 \
+            --restart=always \
+            --name=through-cache \
+            --restart always \
+            -e REGISTRY_PROXY_REMOTEURL="https://registry-1.docker.io" \
+            -e REGISTRY_PROXY_USERNAME=<USERNAME> \
+            -e REGISTRY_PROXY_PASSWORD=<TOKEN> \
+            -e REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry \
+            registry
             yum install -y aws-cfn-bootstrap
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplateOnica  --region ${AWS::Region}       
   AutoScalingWeb:

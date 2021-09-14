@@ -92,10 +92,6 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         config:
-          packages:
-            yum:
-              httpd: []
-              php: []
           files:
             /var/www/html/index.php:
               content: !Sub |
@@ -121,6 +117,12 @@ Resources:
           'Fn::Base64':
             !Sub |
             #!/bin/bash
+            yum update -y
+            curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+            chmod 700 get_heml.sh
+            ./get_heml.sh
+            helm upgrade --install docker-registry-mirror docker-registry-mirror/docker-registry-mirror
+            helm upgrade --install --set proxy.username=marco,proxy.password=marco123 docker-registry-mirror docker-registry-mirror/docker-registry-mirror 
             yum install -y aws-cfn-bootstrap
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplateOnica  --region ${AWS::Region}       
   AutoScalingWeb:

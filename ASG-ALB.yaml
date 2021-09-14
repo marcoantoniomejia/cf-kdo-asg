@@ -41,8 +41,6 @@ Resources:
     Properties:
       Name: ALBOnica
       Scheme: internet-facing
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
       Subnets: 
         - !Ref Sub1
         - !Ref Sub2
@@ -51,15 +49,15 @@ Resources:
   TGOnica:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties: 
-      HealthCheckIntervalSeconds: 150
-      HealthCheckProtocol: tcp
-      HealthCheckTimeoutSeconds: 30
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: TCP
+      HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 3
       Name: TGOnica
+      Protocol: TCP
       Port: 22
-      Protocol: tcp
       TargetType: instance
-      UnhealthyThresholdCount: 5
+      UnhealthyThresholdCount: 3
       VpcId: !Ref VPCOnica
   ListenerOnicaWeb:
     Type: AWS::ElasticLoadBalancingV2::Listener

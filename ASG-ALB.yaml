@@ -39,7 +39,7 @@ Resources:
   ALBOnica:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: ALBOnicaWeb
+      Name: ALBOnica
       Scheme: internet-facing
       SecurityGroups:
         - !Ref ALBSecurityGroup
@@ -47,18 +47,17 @@ Resources:
         - !Ref Sub1
         - !Ref Sub2
         - !Ref Sub3
-      Type: application
-  TGOnica: REVISAR EL TARGET GROUP
+      Type: network
+  TGOnica:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties: 
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /index.php
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 10
+      HealthCheckIntervalSeconds: 150
+      HealthCheckProtocol: tcp
+      HealthCheckTimeoutSeconds: 30
       HealthyThresholdCount: 3
       Name: TGOnica
-      Port: 80
-      Protocol: HTTP
+      Port: 22
+      Protocol: tcp
       TargetType: instance
       UnhealthyThresholdCount: 5
       VpcId: !Ref VPCOnica
@@ -67,28 +66,28 @@ Resources:
     Properties: 
       DefaultActions: 
         - Type: forward
-          TargetGroupArn: !Ref TGOnicaWeb
-      LoadBalancerArn: !Ref ALBOnicaWeb
-      Port: 80
-      Protocol: HTTP
+          TargetGroupArn: !Ref TGOnica
+      LoadBalancerArn: !Ref ALBOnica
+      Port: 22
+      Protocol: tcp
   EC2WebSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Enable http access via port 80 to EC2 Instance
+      GroupDescription: Enable ssh access via port 22 to EC2 Instance
       GroupName: EC2WebSecurityGroup
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: 192.168.123.0/24
+          CidrIp: 0.0.0.0/0
   InboundRule:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref EC2WebSecurityGroup
       IpProtocol: tcp
-      FromPort: '80'
-      ToPort: '80'
+      FromPort: '22'
+      ToPort: '22'
       SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
   LaunchTemplateOnica:
     Type: AWS::EC2::LaunchTemplate
@@ -144,13 +143,11 @@ Resources:
         Version: !GetAtt 
           - LaunchTemplateOnica
           - LatestVersionNumber
-        TargetGroupARNs: 
-          - !Ref TGOnicaWeb
 Outputs:
-  Website:
+  LoadBalancerDNS:
     Description: 
-      The Public DNS for the LoadBalancer Instance
-    Value: 
+      The Public DNS for the LoadBalancer
+    Value:
       !GetAtt 
         - ALBOnica
         - DNSName

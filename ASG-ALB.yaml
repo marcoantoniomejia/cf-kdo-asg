@@ -50,13 +50,13 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access into the docker registry mirror servers
   Sub1:
-    Type: 'List<AWS::EC2::Subnet::Id>'
+    Type: 'AWS::EC2::Subnet::Id'
     Description: Subnet Id for the 1st Load Balancer Subnet
   Sub2:
-    Type: 'List<AWS::EC2::Subnet::Id>'
+    Type: 'AWS::EC2::Subnet::Id'
     Description: Subnet Id for the 2nd Load Balancer Subnet
   Sub3:
-    Type: 'List<AWS::EC2::Subnet::Id>'
+    Type: 'AWS::EC2::Subnet::Id'
     Description: Subnet Id for the 3er Load Balancer Subnet
 Resources:
   ALBSecurityGroup:

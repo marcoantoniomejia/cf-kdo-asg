@@ -8,6 +8,40 @@ Metadata:
           - Subnets
         Label:
           default: Network Configuration
+Mappings:
+  RegionMap:
+    ap-northeast-1:
+      'AMI': ami-02892a4ea9bfa2192
+    ap-northeast-2:
+      'AMI': ami-08c64544f5cfcddd0
+    ap-south-1:
+      'AMI': ami-0a23ccb2cdd9286bb
+    ap-southeast-1:
+      'AMI': ami-082105f875acab993
+    ap-southeast-2:
+      'AMI': ami-0210560cedcb09f07
+    ca-central-1:
+      'AMI': ami-0e2407e55b9816758
+    eu-central-1:
+      'AMI': ami-07df274a488ca9195
+    eu-north-1:
+      'AMI': ami-0f0b4cb72cf3eadf3
+    eu-west-1:
+      'AMI': ami-0d1bf5b68307103c2
+    eu-west-2:
+      'AMI': ami-0dbec48abfe298cab
+    eu-west-3:
+      'AMI': ami-072056ff9d3689e7b
+    sa-east-1:
+      'AMI': ami-09b9b17384f68fd7c
+    us-east-1:
+      'AMI': ami-087c17d1fe0178315
+    us-east-2:
+      'AMI': ami-00dfe2c7ce89a450b
+    us-west-1:
+      'AMI': ami-011996ff98de391d1
+    us-west-2:
+      'AMI': ami-0c2d06d50ce30b442
 Parameters:
   VPCOnica:
     Type: AWS::EC2::VPC::Id
@@ -16,13 +50,13 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access into the docker registry mirror servers
   Sub1:
-    Type: AWS::EC2::Subnet::Id
+    Type: 'List<AWS::EC2::Subnet::Id>'
     Description: Subnet Id for the 1st Load Balancer Subnet
   Sub2:
-    Type: AWS::EC2::Subnet::Id
+    Type: 'List<AWS::EC2::Subnet::Id>'
     Description: Subnet Id for the 2nd Load Balancer Subnet
   Sub3:
-    Type: AWS::EC2::Subnet::Id
+    Type: 'List<AWS::EC2::Subnet::Id>'
     Description: Subnet Id for the 3er Load Balancer Subnet
 Resources:
   ALBSecurityGroup:
@@ -104,7 +138,10 @@ Resources:
     Properties: 
       LaunchTemplateName: tem-onica-web
       LaunchTemplateData: 
-        ImageId: ami-0742b4e673072066f
+        ImageId: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - AMI
         InstanceType: t2.micro
         KeyName: !Ref KeyName
         NetworkInterfaces:

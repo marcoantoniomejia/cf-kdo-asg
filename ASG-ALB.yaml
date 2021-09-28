@@ -43,22 +43,84 @@ Mappings:
     us-west-2:
       'AMI': ami-0c2d06d50ce30b442
 Parameters:
-  VPCOnica:
-    Type: AWS::EC2::VPC::Id
-    Description: Name of an existing VPC Where the ASG and Load Balancer will be created
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access into the docker registry mirror servers
-  Sub1:
-    Type: 'AWS::EC2::Subnet::Id'
-    Description: Subnet Id for the 1st Load Balancer Subnet
-  Sub2:
-    Type: 'AWS::EC2::Subnet::Id'
-    Description: Subnet Id for the 2nd Load Balancer Subnet
-  Sub3:
-    Type: 'AWS::EC2::Subnet::Id'
-    Description: Subnet Id for the 3er Load Balancer Subnet
 Resources:
+  VPCOnica:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.123.0/24
+      Tags:
+        - Key: Name
+          Value: onica1
+  Sub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1a"
+      CidrBlock: 192.168.123.0/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub1
+      VpcId: !Ref VPCOnica
+  Sub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1b"
+      CidrBlock: 192.168.123.16/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub2
+      VpcId: !Ref VPCOnica
+  Sub3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: "us-east-1c"
+      CidrBlock: 192.168.123.32/28
+      Tags:
+        - Key: Name
+          Value: OnicaSub3
+      VpcId: !Ref VPCOnica
+  InternetGatewayOnica:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGOnica
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGatewayOnica
+      VpcId: !Ref VPCOnica
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCOnica
+      Tags:
+        - Key: Name
+          Value: rtPubOnica
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGatewayOnica
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub2
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref Sub3
   ALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -67,8 +129,8 @@ Resources:
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
         - IpProtocol: TCP
-          FromPort: '22'
-          ToPort: '22'
+          FromPort: '80'
+          ToPort: '80'
           CidrIp: 0.0.0.0/0
   ALBOnica:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -89,7 +151,7 @@ Resources:
       HealthyThresholdCount: 3
       Name: TGOnica
       Protocol: TCP
-      Port: 22
+      Port: 80
       TargetType: instance
       UnhealthyThresholdCount: 3
       VpcId: !Ref VPCOnica
@@ -100,7 +162,7 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TGOnica
       LoadBalancerArn: !Ref ALBOnica
-      Port: 22
+      Port: 80
       Protocol: TCP
   EC2WebSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -110,16 +172,16 @@ Resources:
       VpcId: !Ref VPCOnica
       SecurityGroupIngress:
         - IpProtocol: TCP
-          FromPort: '22'
-          ToPort: '22'
+          FromPort: '80'
+          ToPort: '80'
           CidrIp: 0.0.0.0/0
   InboundRule:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref EC2WebSecurityGroup
       IpProtocol: TCP
-      FromPort: '22'
-      ToPort: '22'
+      FromPort: '80'
+      ToPort: '80'
       SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
   LaunchTemplateOnica:
     Type: AWS::EC2::LaunchTemplate
@@ -165,8 +227,8 @@ Resources:
             --name=through-cache \
             --restart always \
             -e REGISTRY_PROXY_REMOTEURL="https://registry-1.docker.io" \
-            -e REGISTRY_PROXY_USERNAME=<USERNAME> \
-            -e REGISTRY_PROXY_PASSWORD=<TOKEN> \
+            -e REGISTRY_PROXY_USERNAME=marco \
+            -e REGISTRY_PROXY_PASSWORD=marco123 \
             -e REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry \
             registry
             yum install -y aws-cfn-bootstrap
@@ -189,6 +251,8 @@ Resources:
         Version: !GetAtt 
           - LaunchTemplateOnica
           - LatestVersionNumber
+      TargetGroupARNs:
+          - !Ref TGOnica
 Outputs:
   LoadBalancerDNS:
     Description: 
